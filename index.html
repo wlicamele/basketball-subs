@@ -1984,19 +1984,56 @@
                     };
                 }
 
-                // Update rotation plan: add to remaining quarters where needed
+                // Update rotation plan: intelligently add to remaining quarters
                 if (currentGame.rotationPlan) {
-                    const player = players.find(p => p.id === playerId);
-                    if (player) {
-                        // Add player to future quarters that need more players
+                    const latePlayer = players.find(p => p.id === playerId);
+                    if (latePlayer) {
+                        const latePlayerSkill = latePlayer.skills.handling + latePlayer.skills.shooting + latePlayer.skills.defense;
+
+                        // Find available players and their skills
+                        const availablePlayers = currentGame.availablePlayers
+                            .map(id => players.find(p => p.id === id))
+                            .filter(p => p && p.id !== playerId);
+
+                        // Sort by skill (lowest to highest)
+                        const sortedBySkill = availablePlayers.sort((a, b) => {
+                            const totalA = a.skills.handling + a.skills.shooting + a.skills.defense;
+                            const totalB = b.skills.handling + b.skills.shooting + b.skills.defense;
+                            return totalA - totalB;
+                        });
+
+                        // Try to replace lower-skilled players in future quarters
                         for (let q = currentGame.quarter; q <= 4; q++) {
                             const skipFirst = (q === currentGame.quarter && currentGame.half === 2);
 
-                            if (!skipFirst && currentGame.rotationPlan.quarters[q].first.length < 5) {
-                                currentGame.rotationPlan.quarters[q].first.push(playerId);
+                            // Try to swap into first half
+                            if (!skipFirst) {
+                                for (let i = 0; i < sortedBySkill.length; i++) {
+                                    const playerToReplace = sortedBySkill[i];
+                                    const replaceSkill = playerToReplace.skills.handling + playerToReplace.skills.shooting + playerToReplace.skills.defense;
+
+                                    if (latePlayerSkill > replaceSkill &&
+                                        currentGame.rotationPlan.quarters[q].first.includes(playerToReplace.id)) {
+                                        // Replace lower-skilled player
+                                        const idx = currentGame.rotationPlan.quarters[q].first.indexOf(playerToReplace.id);
+                                        currentGame.rotationPlan.quarters[q].first[idx] = playerId;
+                                        break;
+                                    }
+                                }
                             }
-                            if (currentGame.rotationPlan.quarters[q].second.length < 5) {
-                                currentGame.rotationPlan.quarters[q].second.push(playerId);
+
+                            // Try to swap into second half
+                            for (let i = 0; i < sortedBySkill.length; i++) {
+                                const playerToReplace = sortedBySkill[i];
+                                const replaceSkill = playerToReplace.skills.handling + playerToReplace.skills.shooting + playerToReplace.skills.defense;
+
+                                if (latePlayerSkill > replaceSkill &&
+                                    currentGame.rotationPlan.quarters[q].second.includes(playerToReplace.id)) {
+                                    // Replace lower-skilled player
+                                    const idx = currentGame.rotationPlan.quarters[q].second.indexOf(playerToReplace.id);
+                                    currentGame.rotationPlan.quarters[q].second[idx] = playerId;
+                                    break;
+                                }
                             }
                         }
                     }
