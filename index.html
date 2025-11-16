@@ -462,8 +462,12 @@
             <div id="roster-tab" class="tab-content active">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>Team Roster</h2>
-                    <button class="btn" onclick="openAddPlayerModal()">+ Add Player</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" onclick="loadPlayersFromCSV()">🔄 Load from CSV</button>
+                        <button class="btn" onclick="openAddPlayerModal()">+ Add Player</button>
+                    </div>
                 </div>
+                <div id="csv-status" style="margin-bottom: 16px;"></div>
                 <div id="player-list"></div>
             </div>
 
@@ -614,6 +618,67 @@
         renderPlayers();
         renderGame();
         renderHistory();
+
+        // CSV Loading
+        async function loadPlayersFromCSV() {
+            const statusDiv = document.getElementById('csv-status');
+            statusDiv.innerHTML = '<div class="alert alert-info">Loading players from CSV...</div>';
+
+            try {
+                const response = await fetch('players.csv');
+                if (!response.ok) {
+                    throw new Error('Could not load players.csv');
+                }
+
+                const csvText = await response.text();
+                const lines = csvText.trim().split('\n');
+
+                // Skip header row
+                const playerLines = lines.slice(1);
+
+                // Parse CSV
+                const newPlayers = playerLines.map(line => {
+                    const [number, name, handling, shooting, defense] = line.split(',').map(s => s.trim());
+
+                    return {
+                        id: Date.now() + Math.random(), // Generate unique ID
+                        name: name,
+                        number: parseInt(number),
+                        skills: {
+                            handling: parseInt(handling),
+                            shooting: parseInt(shooting),
+                            defense: parseInt(defense)
+                        }
+                    };
+                });
+
+                // Merge with existing players (update if number exists, add if new)
+                newPlayers.forEach(newPlayer => {
+                    const existingIndex = players.findIndex(p => p.number === newPlayer.number);
+                    if (existingIndex >= 0) {
+                        // Update existing player but keep their ID
+                        players[existingIndex] = {
+                            ...newPlayer,
+                            id: players[existingIndex].id
+                        };
+                    } else {
+                        // Add new player
+                        players.push(newPlayer);
+                    }
+                });
+
+                localStorage.setItem('players', JSON.stringify(players));
+                renderPlayers();
+
+                statusDiv.innerHTML = `<div class="alert alert-info">✓ Loaded ${newPlayers.length} players from CSV</div>`;
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 3000);
+
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="alert alert-warning">⚠️ Could not load CSV: ${error.message}. Make sure players.csv exists in the repository.</div>`;
+            }
+        }
 
         // Tab Management
         function switchTab(tabName) {
