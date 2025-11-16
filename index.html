@@ -1878,16 +1878,11 @@
                 if (currentGame.rotationPlan) {
                     const suggestedPlayers = currentGame.rotationPlan.quarters[currentGame.quarter].second;
                     if (suggestedPlayers && suggestedPlayers.length > 0) {
-                        if (confirm(`Switch to 2nd half lineup?\n\nSuggested lineup from rotation plan:\n${suggestedPlayers.map(id => {
-                            const p = players.find(player => player.id === id);
-                            return p ? `#${p.number} ${p.name}` : '';
-                        }).filter(n => n).join(', ')}\n\nClick OK to auto-substitute, or Cancel to manage manually.`)) {
-                            // Auto-substitute to suggested lineup
-                            currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
-                            currentGame.onCourt.forEach(playerId => {
-                                currentGame.playerStats[playerId].lastSubIn = Date.now();
-                            });
-                        }
+                        // Auto-substitute to suggested lineup
+                        currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
+                        currentGame.onCourt.forEach(playerId => {
+                            currentGame.playerStats[playerId].lastSubIn = Date.now();
+                        });
                     }
                 }
             } else {
@@ -1909,15 +1904,10 @@
                 if (currentGame.rotationPlan) {
                     const suggestedPlayers = currentGame.rotationPlan.quarters[currentGame.quarter].first;
                     if (suggestedPlayers && suggestedPlayers.length > 0) {
-                        if (confirm(`Start Quarter ${currentGame.quarter}?\n\nSuggested lineup from rotation plan:\n${suggestedPlayers.map(id => {
-                            const p = players.find(player => player.id === id);
-                            return p ? `#${p.number} ${p.name}` : '';
-                        }).filter(n => n).join(', ')}\n\nClick OK to auto-substitute, or Cancel to manage manually.`)) {
-                            currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
-                            currentGame.onCourt.forEach(playerId => {
-                                currentGame.playerStats[playerId].lastSubIn = Date.now();
-                            });
-                        }
+                        currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
+                        currentGame.onCourt.forEach(playerId => {
+                            currentGame.playerStats[playerId].lastSubIn = Date.now();
+                        });
                     }
                 }
             }
