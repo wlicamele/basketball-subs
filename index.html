@@ -905,10 +905,13 @@
             });
             const totalPlayers = sortedBySkill.length;
 
-            // Strategy based on player count:
-            // - Best players should appear in more halves
-            // - Everyone must play at least 1 half per quarter (4 halves minimum)
-            // - Total player-halves needed: 8 halves × 5 positions = 40
+            // League Rules based on player count:
+            // ALL: Minimum 1 half per quarter (4 halves total minimum)
+            // 10 players: Exactly 1 half per quarter (4 halves total)
+            // 8-9 players: Max 5 out of 8 halves
+            // 7 players: Max 6 out of 8 halves
+            // 5-6 players: No maximum (will play more)
+            // Strategy: Best players get maximum allowed time
 
             if (totalPlayers <= 5) {
                 // 5 or fewer players: everyone plays all halves
@@ -917,11 +920,8 @@
                     rotationPlan.quarters[q].second = sortedBySkill.map(p => p.id);
                 }
             } else if (totalPlayers <= 7) {
-                // 6-7 players: Reasonable rotation with rest periods
-                // Top players: 5-6 halves (don't play entire game)
-                // Middle players: 5 halves
-                // Bottom players: 4 halves (minimum)
-                // Max anyone can play: 6/8 halves (75% of game) for rest
+                // 6-7 players: League rule max 6 halves per player
+                // Strategy: Best players play 6 halves (max), weaker play 4-5 halves
 
                 // Define rotation pattern for each quarter
                 // Q1: Top 5 start | Top 3 + Bottom 2 finish
@@ -987,35 +987,70 @@
                     rotationPlan.quarters[q].second = secondHalf;
                 }
             } else {
-                // 8+ players: Simple rotation ensuring everyone plays at least once per quarter
-                let playerIndex = 0;
+                // 8-10 players: League rules with maximums
+                // 10 players: Max 4 halves (exactly 1 per quarter)
+                // 8-9 players: Max 5 halves
+                // Strategy: Best players get maximum allowed, weaker get minimum
+
+                const maxHalves = totalPlayers === 10 ? 4 : 5; // 10 players = 4 max, 8-9 = 5 max
+
+                // Track total halves per player and per quarter
+                const totalHalvesPlayed = {};
+                const quarterTracking = {};
+                sortedBySkill.forEach(p => {
+                    totalHalvesPlayed[p.id] = 0;
+                    quarterTracking[p.id] = {1: 0, 2: 0, 3: 0, 4: 0};
+                });
+
+                // Assign players quarter by quarter
                 for (let q = 1; q <= 4; q++) {
                     const firstHalf = [];
                     const secondHalf = [];
 
-                    // First half: top skilled players
-                    for (let i = 0; i < 5; i++) {
-                        firstHalf.push(sortedBySkill[(playerIndex + i) % totalPlayers].id);
+                    // FIRST HALF: Pick best available players who:
+                    // 1. Haven't played this quarter yet
+                    // 2. Haven't reached their max halves
+                    const availableForFirst = sortedBySkill.filter(p =>
+                        quarterTracking[p.id][q] === 0 && totalHalvesPlayed[p.id] < maxHalves
+                    );
+
+                    // Fill first half with best available
+                    for (let i = 0; i < availableForFirst.length && firstHalf.length < 5; i++) {
+                        const player = availableForFirst[i];
+                        firstHalf.push(player.id);
+                        quarterTracking[player.id][q]++;
+                        totalHalvesPlayed[player.id]++;
                     }
 
-                    // Second half: rotate, keep 2 for continuity
-                    secondHalf.push(firstHalf[0]);
-                    secondHalf.push(firstHalf[1]);
+                    // SECOND HALF: Must ensure everyone plays at least once this quarter
+                    // Priority 1: Players who MUST play (haven't played this quarter, haven't hit max)
+                    const mustPlaySecond = sortedBySkill.filter(p =>
+                        quarterTracking[p.id][q] === 0 && totalHalvesPlayed[p.id] < maxHalves
+                    );
 
-                    // Add different players until we have 5
-                    let offset = 5;
-                    while (secondHalf.length < 5 && offset < totalPlayers + 5) {
-                        const nextPlayer = sortedBySkill[(playerIndex + offset) % totalPlayers].id;
-                        if (!secondHalf.includes(nextPlayer)) {
-                            secondHalf.push(nextPlayer);
+                    mustPlaySecond.forEach(p => {
+                        if (secondHalf.length < 5) {
+                            secondHalf.push(p.id);
+                            quarterTracking[p.id][q]++;
+                            totalHalvesPlayed[p.id]++;
                         }
-                        offset++;
+                    });
+
+                    // Priority 2: Fill remaining spots with best players who can play both halves
+                    // (already played first half and haven't hit max)
+                    const canPlayBoth = sortedBySkill.filter(p =>
+                        firstHalf.includes(p.id) && totalHalvesPlayed[p.id] < maxHalves
+                    );
+
+                    for (let i = 0; i < canPlayBoth.length && secondHalf.length < 5; i++) {
+                        const player = canPlayBoth[i];
+                        secondHalf.push(player.id);
+                        quarterTracking[player.id][q]++;
+                        totalHalvesPlayed[player.id]++;
                     }
 
                     rotationPlan.quarters[q].first = firstHalf;
                     rotationPlan.quarters[q].second = secondHalf;
-
-                    playerIndex = (playerIndex + 2) % totalPlayers;
                 }
             }
 
