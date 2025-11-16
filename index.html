@@ -1473,10 +1473,15 @@
                     const firstHalf = rotationPlan.quarters[q].first.includes(player.id);
                     const secondHalf = rotationPlan.quarters[q].second.includes(player.id);
 
-                    // If not available, show red X
+                    // Always show the rotation status
+                    // If not available, show what they would have played with red X background
                     if (!isAvailable) {
-                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">✗</td>`;
-                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">✗</td>`;
+                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">
+                            ${firstHalf ? '✗' : '—'}
+                        </td>`;
+                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">
+                            ${secondHalf ? '✗' : '—'}
+                        </td>`;
                     } else {
                         html += `<td class="${firstHalf ? 'playing' : 'bench'}" onclick="toggleRotation(${player.id}, ${q}, 'first')">
                             ${firstHalf ? '✓' : '—'}
