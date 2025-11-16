@@ -970,12 +970,14 @@
                     secondHalf.push(firstHalf[0]);
                     secondHalf.push(firstHalf[1]);
 
-                    // Add different players
-                    for (let i = 5; i < 8 && secondHalf.length < 5; i++) {
-                        const nextPlayer = sortedBySkill[(playerIndex + i) % totalPlayers].id;
+                    // Add different players until we have 5
+                    let offset = 5;
+                    while (secondHalf.length < 5 && offset < totalPlayers + 5) {
+                        const nextPlayer = sortedBySkill[(playerIndex + offset) % totalPlayers].id;
                         if (!secondHalf.includes(nextPlayer)) {
                             secondHalf.push(nextPlayer);
                         }
+                        offset++;
                     }
 
                     rotationPlan.quarters[q].first = firstHalf;
