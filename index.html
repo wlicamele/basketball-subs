@@ -1064,6 +1064,15 @@
             }
 
             rotationPlan.availability[playerId] = !rotationPlan.availability[playerId];
+
+            // If player is now unavailable, remove them from all quarters
+            if (!rotationPlan.availability[playerId]) {
+                for (let q = 1; q <= 4; q++) {
+                    rotationPlan.quarters[q].first = rotationPlan.quarters[q].first.filter(id => id !== playerId);
+                    rotationPlan.quarters[q].second = rotationPlan.quarters[q].second.filter(id => id !== playerId);
+                }
+            }
+
             localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
             renderRotationPlan();
         }
