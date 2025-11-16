@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotation Algorithm Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background: #667eea;
+            color: white;
+        }
+        .playing {
+            background: #d4edda;
+            font-weight: bold;
+        }
+        .bench {
+            background: #fff3cd;
+        }
+        .stats {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .warning {
+            color: #856404;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Basketball Rotation Algorithm Test - 7 Players</h1>
+
+    <div class="stats">
+        <h2>Test Scenario:</h2>
+        <p>7 players with varying skill levels</p>
+        <p><strong>Goal:</strong> Best players get most time, everyone gets minimum 1 half per quarter</p>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        // Test data: 7 players with different skill levels
+        const players = [
+            { id: 1, number: 1, name: 'Brantley', skills: { handling: 1, shooting: 2, defense: 1 } }, // Total: 4
+            { id: 2, number: 2, name: 'Carter', skills: { handling: 2, shooting: 2, defense: 2 } },    // Total: 6
+            { id: 3, number: 3, name: 'Cooper', skills: { handling: 4, shooting: 3, defense: 3 } },    // Total: 10
+            { id: 4, number: 4, name: 'Dillon', skills: { handling: 5, shooting: 5, defense: 5 } },    // Total: 15 (BEST)
+            { id: 5, number: 5, name: 'Elijah', skills: { handling: 1, shooting: 1, defense: 1 } },    // Total: 3
+            { id: 6, number: 6, name: 'Ethan', skills: { handling: 2, shooting: 2, defense: 2 } },     // Total: 6
+            { id: 7, number: 7, name: 'Jude', skills: { handling: 4, shooting: 4, defense: 4 } }       // Total: 12
+        ];
+
+        // Calculate total skills and sort
+        players.forEach(p => {
+            p.totalSkill = p.skills.handling + p.skills.shooting + p.skills.defense;
+        });
+
+        const sortedBySkill = [...players].sort((a, b) => b.totalSkill - a.totalSkill);
+
+        // Generate rotation plan (improved algorithm)
+        function generateBalancedRotation() {
+            const rotation = {
+                quarters: {
+                    1: { first: [], second: [] },
+                    2: { first: [], second: [] },
+                    3: { first: [], second: [] },
+                    4: { first: [], second: [] }
+                }
+            };
+
+            // Strategy: Best players play more halves
+            // Skill tiers: Top 3 play 6-7 halves, Middle 2 play 5 halves, Bottom 2 play 4 halves (minimum)
+
+            const top3 = sortedBySkill.slice(0, 3);      // Play most (6-7 halves)
+            const middle2 = sortedBySkill.slice(3, 5);   // Play medium (5 halves)
+            const bottom2 = sortedBySkill.slice(5, 7);   // Play minimum (4 halves)
+
+            console.log('Top 3:', top3.map(p => `${p.name} (${p.totalSkill})`));
+            console.log('Middle 2:', middle2.map(p => `${p.name} (${p.totalSkill})`));
+            console.log('Bottom 2:', bottom2.map(p => `${p.name} (${p.totalSkill})`));
+
+            // Assign halves ensuring best players get more time
+            // Each quarter needs 5 players per half
+            // Top 3 should appear in most halves
+            // Bottom 2 should only appear in 4 halves total (1 per quarter)
+
+            for (let quarter = 1; quarter <= 4; quarter++) {
+                // First half of quarter
+                const firstHalf = [];
+
+                // Always include top 2 players in first half
+                firstHalf.push(top3[0].id);
+                firstHalf.push(top3[1].id);
+
+                // Rotate the 3rd spot among top players and middle
+                if (quarter % 2 === 1) {
+                    firstHalf.push(top3[2].id);
+                } else {
+                    firstHalf.push(middle2[0].id);
+                }
+
+                // Add one middle player
+                firstHalf.push(middle2[quarter % 2].id);
+
+                // Add one bottom player (rotate)
+                firstHalf.push(bottom2[(quarter - 1) % 2].id);
+
+                rotation.quarters[quarter].first = firstHalf;
+
+                // Second half of quarter
+                const secondHalf = [];
+
+                // Keep best player in both halves for continuity
+                secondHalf.push(top3[0].id);
+
+                // Add other top players
+                if (quarter % 2 === 0) {
+                    secondHalf.push(top3[2].id);
+                } else {
+                    secondHalf.push(top3[1].id);
+                }
+
+                // Add middle players
+                secondHalf.push(middle2[(quarter + 1) % 2].id);
+
+                // Rotate remaining spots
+                if (quarter <= 2) {
+                    secondHalf.push(middle2[0].id);
+                    secondHalf.push(bottom2[1].id);
+                } else {
+                    secondHalf.push(middle2[1].id);
+                    secondHalf.push(bottom2[0].id);
+                }
+
+                rotation.quarters[quarter].second = secondHalf;
+            }
+
+            return rotation;
+        }
+
+        const rotation = generateBalancedRotation();
+
+        // Analyze results
+        function analyzeRotation() {
+            const analysis = players.map(player => {
+                let halvesPlayed = 0;
+                const quarterBreakdown = {};
+
+                for (let q = 1; q <= 4; q++) {
+                    const inFirst = rotation.quarters[q].first.includes(player.id);
+                    const inSecond = rotation.quarters[q].second.includes(player.id);
+
+                    quarterBreakdown[q] = {
+                        first: inFirst,
+                        second: inSecond,
+                        total: (inFirst ? 1 : 0) + (inSecond ? 1 : 0)
+                    };
+
+                    halvesPlayed += (inFirst ? 1 : 0) + (inSecond ? 1 : 0);
+                }
+
+                return {
+                    player,
+                    halvesPlayed,
+                    quarterBreakdown,
+                    minutesPlayed: halvesPlayed * 6, // 6 minutes per half
+                    meetsMinimum: Object.values(quarterBreakdown).every(q => q.total >= 1)
+                };
+            });
+
+            return analysis;
+        }
+
+        const analysis = analyzeRotation();
+
+        // Display results
+        let html = '<h2>Rotation Grid</h2>';
+        html += '<table><thead><tr>';
+        html += '<th>Player</th><th>Skill</th>';
+        for (let q = 1; q <= 4; q++) {
+            html += `<th colspan="2">Quarter ${q}</th>`;
+        }
+        html += '<th>Total Halves</th><th>Minutes</th></tr>';
+        html += '<tr><th colspan="2"></th>';
+        for (let q = 1; q <= 4; q++) {
+            html += '<th>1st</th><th>2nd</th>';
+        }
+        html += '<th></th><th></th></tr></thead><tbody>';
+
+        analysis.forEach(item => {
+            html += '<tr>';
+            html += `<td><strong>#${item.player.number} ${item.player.name}</strong></td>`;
+            html += `<td>${item.player.totalSkill}</td>`;
+
+            for (let q = 1; q <= 4; q++) {
+                const qData = item.quarterBreakdown[q];
+                html += `<td class="${qData.first ? 'playing' : 'bench'}">${qData.first ? '✓' : '—'}</td>`;
+                html += `<td class="${qData.second ? 'playing' : 'bench'}">${qData.second ? '✓' : '—'}</td>`;
+            }
+
+            html += `<td><strong>${item.halvesPlayed}</strong></td>`;
+            html += `<td><strong>${item.minutesPlayed} min</strong></td>`;
+            html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+
+        // Validation checks
+        html += '<div class="stats"><h2>Validation Results:</h2>';
+
+        // Check 1: Everyone meets minimum (1 half per quarter)
+        const allMeetMinimum = analysis.every(a => a.meetsMinimum);
+        html += `<p class="${allMeetMinimum ? 'success' : 'error'}">`;
+        html += `✓ Minimum Playing Time: ${allMeetMinimum ? 'PASS' : 'FAIL'} - Everyone plays ≥1 half per quarter</p>`;
+
+        // Check 2: Best players get most time
+        const topPlayer = analysis.find(a => a.player.name === 'Dillon');
+        const bottomPlayer = analysis.find(a => a.player.name === 'Elijah');
+        const bestGetsMore = topPlayer.halvesPlayed > bottomPlayer.halvesPlayed;
+        html += `<p class="${bestGetsMore ? 'success' : 'error'}">`;
+        html += `✓ Best Player Priority: ${bestGetsMore ? 'PASS' : 'FAIL'} - ${topPlayer.player.name} (${topPlayer.halvesPlayed} halves) > ${bottomPlayer.player.name} (${bottomPlayer.halvesPlayed} halves)</p>`;
+
+        // Check 3: Each half has exactly 5 players
+        let allHaveFive = true;
+        for (let q = 1; q <= 4; q++) {
+            if (rotation.quarters[q].first.length !== 5 || rotation.quarters[q].second.length !== 5) {
+                allHaveFive = false;
+            }
+        }
+        html += `<p class="${allHaveFive ? 'success' : 'error'}">`;
+        html += `✓ Roster Size: ${allHaveFive ? 'PASS' : 'FAIL'} - Each half has exactly 5 players</p>`;
+
+        // Detailed breakdown
+        html += '<h3>Playing Time Distribution:</h3><ul>';
+        analysis
+            .sort((a, b) => b.halvesPlayed - a.halvesPlayed)
+            .forEach(item => {
+                const className = item.halvesPlayed >= 6 ? 'success' :
+                                 item.halvesPlayed >= 4 ? '' : 'error';
+                html += `<li class="${className}">`;
+                html += `<strong>${item.player.name}</strong> (Skill: ${item.player.totalSkill}): `;
+                html += `${item.halvesPlayed} halves (${item.minutesPlayed} minutes)`;
+
+                // Show per quarter
+                html += ' | Per Quarter: ';
+                for (let q = 1; q <= 4; q++) {
+                    html += `Q${q}:${item.quarterBreakdown[q].total} `;
+                }
+                html += '</li>';
+            });
+        html += '</ul>';
+
+        html += '<h3>Expected Distribution for 7 Players:</h3>';
+        html += '<p>Best players (Dillon, Jude, Cooper): 6-7 halves (30-36 min)</p>';
+        html += '<p>Middle players (Carter, Ethan): 5 halves (24-30 min)</p>';
+        html += '<p>Newer players (Brantley, Elijah): 4 halves minimum (24 min)</p>';
+        html += '<p><em>Total: 8 halves × 5 positions = 40 player-halves to distribute</em></p>';
+
+        html += '</div>';
+
+        document.getElementById('output').innerHTML = html;
+    </script>
+</body>
+</html>

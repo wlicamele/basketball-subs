@@ -836,70 +836,56 @@
                     rotationPlan.quarters[q].second = sortedBySkill.map(p => p.id);
                 }
             } else if (totalPlayers <= 7) {
-                // 6-7 players: Best players play more, rotate bottom players
-                // Top players (0-2): play 6-7 halves
-                // Middle players (3-4): play 5 halves
-                // Bottom players (5-6): play 4 halves (minimum)
+                // 6-7 players: Reasonable rotation with rest periods
+                // Top players: 5-6 halves (don't play entire game)
+                // Middle players: 5 halves
+                // Bottom players: 4 halves (minimum)
+                // Max anyone can play: 6/8 halves (75% of game) for rest
+
+                // Define rotation pattern for each quarter
+                // Q1: Top 5 start | Top 3 + Bottom 2 finish
+                // Q2: Mix | Different mix
+                // Q3: Fresh legs | Rotate
+                // Q4: Best available | Close out
+
+                const patterns = {
+                    1: { // Quarter 1
+                        first: [0, 1, 2, 3, 4],      // Top 5 start
+                        second: [0, 2, 4, 5, 6]      // Keep some, rotate in bottom
+                    },
+                    2: { // Quarter 2
+                        first: [1, 2, 3, 5, 6],      // Rest best player, give bottom time
+                        second: [0, 1, 3, 4, 5]      // Bring back best
+                    },
+                    3: { // Quarter 3
+                        first: [0, 1, 2, 4, 6],      // Fresh start
+                        second: [1, 2, 3, 5, 6]      // Rest best again
+                    },
+                    4: { // Quarter 4
+                        first: [0, 2, 3, 4, 5],      // Mix for closing
+                        second: [0, 1, 2, 3, 4]      // Best 5 to close
+                    }
+                };
 
                 for (let q = 1; q <= 4; q++) {
+                    const pattern = patterns[q];
                     const firstHalf = [];
                     const secondHalf = [];
 
-                    // Always include top 2 players in first half
-                    firstHalf.push(sortedBySkill[0].id);
-                    firstHalf.push(sortedBySkill[1].id);
-
-                    // Best player plays both halves for continuity
-                    secondHalf.push(sortedBySkill[0].id);
-
-                    if (totalPlayers >= 3) {
-                        // Rotate 3rd best player (plays 6/8 halves)
-                        if (q !== 2) {
-                            firstHalf.push(sortedBySkill[2].id);
+                    // Build halves based on pattern
+                    pattern.first.forEach(idx => {
+                        if (idx < totalPlayers) {
+                            firstHalf.push(sortedBySkill[idx].id);
                         }
-                        if (q !== 4) {
-                            secondHalf.push(sortedBySkill[2].id);
-                        }
-                    }
+                    });
 
-                    if (totalPlayers >= 4) {
-                        // 4th player (plays 5/8 halves)
-                        if (q % 2 === 1) {
-                            firstHalf.push(sortedBySkill[3].id);
-                            secondHalf.push(sortedBySkill[3].id);
-                        } else {
-                            firstHalf.push(sortedBySkill[3].id);
+                    pattern.second.forEach(idx => {
+                        if (idx < totalPlayers) {
+                            secondHalf.push(sortedBySkill[idx].id);
                         }
-                    }
+                    });
 
-                    if (totalPlayers >= 5) {
-                        // 5th player (plays 5/8 halves)
-                        if (q % 2 === 0) {
-                            firstHalf.push(sortedBySkill[4].id);
-                            secondHalf.push(sortedBySkill[4].id);
-                        } else {
-                            secondHalf.push(sortedBySkill[4].id);
-                        }
-                    }
-
-                    // Bottom 2 players (5th and 6th): play minimum 4/8 halves (1 per quarter)
-                    if (totalPlayers >= 6) {
-                        if (q <= 2) {
-                            firstHalf.push(sortedBySkill[5].id);
-                        } else {
-                            secondHalf.push(sortedBySkill[5].id);
-                        }
-                    }
-
-                    if (totalPlayers >= 7) {
-                        if (q <= 2) {
-                            secondHalf.push(sortedBySkill[6].id);
-                        } else {
-                            firstHalf.push(sortedBySkill[6].id);
-                        }
-                    }
-
-                    // Fill remaining spots to ensure 5 players per half
+                    // Fill to 5 if needed (for 6 players)
                     while (firstHalf.length < Math.min(5, totalPlayers)) {
                         for (let i = 0; i < totalPlayers; i++) {
                             if (!firstHalf.includes(sortedBySkill[i].id) && firstHalf.length < 5) {
