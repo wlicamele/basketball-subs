@@ -1848,7 +1848,15 @@
 
             const sortedPlayers = [...players].sort((a, b) => a.number - b.number);
             sortedPlayers.forEach(player => {
-                if (!currentGame.availablePlayers.includes(player.id)) return;
+                const isAvailable = currentGame.availablePlayers.includes(player.id);
+                const playerStats = currentGame.playerStats[player.id];
+
+                // Determine if player should be shown (in rotation plan or has stats)
+                const inRotation = Object.values(plan.quarters).some(q =>
+                    q.first.includes(player.id) || q.second.includes(player.id)
+                );
+
+                if (!inRotation && !isAvailable) return;
 
                 html += '<tr>';
                 html += `<td class="player-cell" style="font-size: 11px;">#${player.number} ${player.name}</td>`;
@@ -1860,12 +1868,29 @@
                     const isCurrentQH = q === currentGame.quarter && currentGame.half === 1;
                     const isCurrentQ2 = q === currentGame.quarter && currentGame.half === 2;
 
-                    html += `<td class="${firstHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQH ? 'border: 3px solid #e74c3c;' : ''}">
-                        ${firstHalf ? '✓' : '—'}
-                    </td>`;
-                    html += `<td class="${secondHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQ2 ? 'border: 3px solid #e74c3c;' : ''}">
-                        ${secondHalf ? '✓' : '—'}
-                    </td>`;
+                    // Check if player was unavailable for this quarter
+                    const leftAtQuarter = playerStats?.leftAtQuarter;
+                    const arrivedAtQuarter = playerStats?.arrivedAtQuarter;
+                    const wasUnavailable = (leftAtQuarter && q >= leftAtQuarter) ||
+                                          (arrivedAtQuarter && q < arrivedAtQuarter);
+
+                    if (wasUnavailable) {
+                        // Show red X for unavailable quarters
+                        html += `<td style="font-size: 11px; background: #ffebee; color: #c62828; font-weight: bold; cursor: not-allowed; ${isCurrentQH ? 'border: 3px solid #e74c3c;' : ''}">
+                            ✗
+                        </td>`;
+                        html += `<td style="font-size: 11px; background: #ffebee; color: #c62828; font-weight: bold; cursor: not-allowed; ${isCurrentQ2 ? 'border: 3px solid #e74c3c;' : ''}">
+                            ✗
+                        </td>`;
+                    } else {
+                        // Show normal playing/bench status
+                        html += `<td class="${firstHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQH ? 'border: 3px solid #e74c3c;' : ''}">
+                            ${firstHalf ? '✓' : '—'}
+                        </td>`;
+                        html += `<td class="${secondHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQ2 ? 'border: 3px solid #e74c3c;' : ''}">
+                            ${secondHalf ? '✓' : '—'}
+                        </td>`;
+                    }
                 }
 
                 html += '</tr>';
@@ -2306,6 +2331,12 @@
             if (isCurrentlyAvailable) {
                 // Remove player (injury, left early, etc.)
                 currentGame.availablePlayers = currentGame.availablePlayers.filter(id => id !== playerId);
+
+                // Track when they left
+                if (currentGame.playerStats[playerId]) {
+                    currentGame.playerStats[playerId].leftEarly = true;
+                    currentGame.playerStats[playerId].leftAtQuarter = currentGame.quarter;
+                }
 
                 // Regenerate rotation for remaining quarters to backfill
                 regenerateRemainingRotation();
