@@ -1134,6 +1134,224 @@
             return true;
         }
 
+        // Regenerate rotation for remaining quarters during an active game
+        function regenerateRemainingRotation() {
+            if (!currentGame || !currentGame.rotationPlan) return;
+
+            const availablePlayers = currentGame.availablePlayers
+                .map(id => players.find(p => p.id === id))
+                .filter(p => p);
+
+            if (availablePlayers.length === 0) return;
+
+            // Calculate skill totals and sort
+            availablePlayers.forEach(p => {
+                p.totalSkill = p.skills.handling + p.skills.shooting + p.skills.defense;
+            });
+            const sortedBySkill = [...availablePlayers].sort((a, b) => b.totalSkill - a.totalSkill);
+
+            const totalPlayers = availablePlayers.length;
+
+            // Determine max halves based on team size
+            let maxHalves;
+            if (totalPlayers === 10) maxHalves = 4;
+            else if (totalPlayers >= 8) maxHalves = 5;
+            else if (totalPlayers === 7) maxHalves = 6;
+            else maxHalves = 8; // 5-6 players, no max
+
+            // Track how many halves each player has already played
+            const halvesSoFar = {};
+            availablePlayers.forEach(p => {
+                halvesSoFar[p.id] = 0;
+            });
+
+            // Count halves already played (from completed quarters/halves)
+            for (let q = 1; q <= 4; q++) {
+                const firstHalfComplete = (q < currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 2);
+                const secondHalfComplete = (q < currentGame.quarter);
+
+                if (firstHalfComplete) {
+                    currentGame.rotationPlan.quarters[q].first.forEach(pid => {
+                        if (halvesSoFar[pid] !== undefined) {
+                            halvesSoFar[pid]++;
+                        }
+                    });
+                }
+                if (secondHalfComplete) {
+                    currentGame.rotationPlan.quarters[q].second.forEach(pid => {
+                        if (halvesSoFar[pid] !== undefined) {
+                            halvesSoFar[pid]++;
+                        }
+                    });
+                }
+            }
+
+            // Track per-quarter participation for minimum rule
+            const quarterTracking = {};
+            availablePlayers.forEach(p => {
+                quarterTracking[p.id] = {1: 0, 2: 0, 3: 0, 4: 0};
+            });
+
+            // Mark already played quarters
+            for (let q = 1; q <= 4; q++) {
+                const firstHalfComplete = (q < currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 2);
+                const secondHalfComplete = (q < currentGame.quarter);
+
+                if (firstHalfComplete) {
+                    currentGame.rotationPlan.quarters[q].first.forEach(pid => {
+                        if (quarterTracking[pid]) {
+                            quarterTracking[pid][q]++;
+                        }
+                    });
+                }
+                if (secondHalfComplete) {
+                    currentGame.rotationPlan.quarters[q].second.forEach(pid => {
+                        if (quarterTracking[pid]) {
+                            quarterTracking[pid][q]++;
+                        }
+                    });
+                }
+            }
+
+            // Determine target halves for remaining play
+            const targetHalves = {};
+            if (totalPlayers === 10) {
+                sortedBySkill.forEach(p => targetHalves[p.id] = 4);
+            } else {
+                const remainingHalves = [];
+                for (let q = 1; q <= 4; q++) {
+                    const firstHalfRemaining = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
+                    const secondHalfRemaining = (q > currentGame.quarter);
+                    if (firstHalfRemaining) remainingHalves.push([q, 'first']);
+                    if (secondHalfRemaining) remainingHalves.push([q, 'second']);
+                }
+
+                const slotsToFill = remainingHalves.length * 5;
+                const minPerPlayer = Math.ceil(slotsToFill / totalPlayers);
+                const extraSlots = slotsToFill - (totalPlayers * minPerPlayer);
+                const playersGettingMax = Math.max(0, extraSlots);
+
+                sortedBySkill.forEach((p, idx) => {
+                    const alreadyPlayed = halvesSoFar[p.id];
+                    const canStillPlay = maxHalves - alreadyPlayed;
+                    const ideally = idx < playersGettingMax ? (minPerPlayer + 1) : minPerPlayer;
+                    targetHalves[p.id] = alreadyPlayed + Math.min(canStillPlay, ideally);
+                });
+            }
+
+            // Regenerate remaining halves
+            for (let q = currentGame.quarter; q <= 4; q++) {
+                // Determine which halves to regenerate for this quarter
+                const shouldRegenerateFirst = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
+                const shouldRegenerateSecond = (q > currentGame.quarter);
+
+                if (shouldRegenerateFirst) {
+                    const firstHalf = [];
+
+                    // Must play: players who haven't played this quarter yet
+                    const mustPlay = sortedBySkill.filter(p =>
+                        quarterTracking[p.id][q] === 0 &&
+                        halvesSoFar[p.id] < targetHalves[p.id]
+                    );
+
+                    mustPlay.forEach(p => {
+                        if (firstHalf.length < 5) {
+                            firstHalf.push(p.id);
+                            quarterTracking[p.id][q]++;
+                            halvesSoFar[p.id]++;
+                        }
+                    });
+
+                    // Fill with best available
+                    const bestAvailable = sortedBySkill.filter(p =>
+                        !firstHalf.includes(p.id) &&
+                        halvesSoFar[p.id] < targetHalves[p.id]
+                    );
+
+                    for (let i = 0; i < bestAvailable.length && firstHalf.length < 5; i++) {
+                        firstHalf.push(bestAvailable[i].id);
+                        quarterTracking[bestAvailable[i].id][q]++;
+                        halvesSoFar[bestAvailable[i].id]++;
+                    }
+
+                    // Safety: fill with anyone if needed
+                    for (let i = 0; i < sortedBySkill.length && firstHalf.length < 5; i++) {
+                        if (!firstHalf.includes(sortedBySkill[i].id)) {
+                            firstHalf.push(sortedBySkill[i].id);
+                            quarterTracking[sortedBySkill[i].id][q]++;
+                            halvesSoFar[sortedBySkill[i].id]++;
+                        }
+                    }
+
+                    currentGame.rotationPlan.quarters[q].first = firstHalf;
+                }
+
+                if (shouldRegenerateSecond) {
+                    const secondHalf = [];
+                    const firstHalf = currentGame.rotationPlan.quarters[q].first;
+
+                    // Q4 2nd half: Best 5 closing lineup
+                    if (q === 4) {
+                        const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
+                        mustPlay.forEach(p => {
+                            if (secondHalf.length < 5) {
+                                secondHalf.push(p.id);
+                                quarterTracking[p.id][q]++;
+                                halvesSoFar[p.id]++;
+                            }
+                        });
+
+                        const bestAvailable = sortedBySkill.filter(p =>
+                            !secondHalf.includes(p.id) &&
+                            halvesSoFar[p.id] < targetHalves[p.id] &&
+                            quarterTracking[p.id][q] === 0
+                        );
+
+                        for (let i = 0; i < bestAvailable.length && secondHalf.length < 5; i++) {
+                            secondHalf.push(bestAvailable[i].id);
+                            quarterTracking[bestAvailable[i].id][q]++;
+                            halvesSoFar[bestAvailable[i].id]++;
+                        }
+                    } else {
+                        // Other quarters: avoid consecutive halves
+                        const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
+                        mustPlay.forEach(p => {
+                            if (secondHalf.length < 5) {
+                                secondHalf.push(p.id);
+                                quarterTracking[p.id][q]++;
+                                halvesSoFar[p.id]++;
+                            }
+                        });
+
+                        const notInFirst = sortedBySkill.filter(p =>
+                            !firstHalf.includes(p.id) &&
+                            !secondHalf.includes(p.id) &&
+                            halvesSoFar[p.id] < targetHalves[p.id]
+                        );
+
+                        for (let i = 0; i < notInFirst.length && secondHalf.length < 5; i++) {
+                            secondHalf.push(notInFirst[i].id);
+                            quarterTracking[notInFirst[i].id][q]++;
+                            halvesSoFar[notInFirst[i].id]++;
+                        }
+                    }
+
+                    // Safety: fill with anyone if needed
+                    for (let i = 0; i < sortedBySkill.length && secondHalf.length < 5; i++) {
+                        if (!secondHalf.includes(sortedBySkill[i].id)) {
+                            secondHalf.push(sortedBySkill[i].id);
+                            quarterTracking[sortedBySkill[i].id][q]++;
+                            halvesSoFar[sortedBySkill[i].id]++;
+                        }
+                    }
+
+                    currentGame.rotationPlan.quarters[q].second = secondHalf;
+                }
+            }
+
+            saveGame();
+        }
+
         // Start game directly with rotation (no modal)
         function startGameDirectly() {
             if (!rotationPlan || !rotationPlan.quarters[1].first || rotationPlan.quarters[1].first.length !== 5) {
@@ -2075,20 +2293,8 @@
                 // Remove player (injury, left early, etc.)
                 currentGame.availablePlayers = currentGame.availablePlayers.filter(id => id !== playerId);
 
-                // Update rotation plan: remove from remaining quarters
-                if (currentGame.rotationPlan) {
-                    for (let q = currentGame.quarter; q <= 4; q++) {
-                        // Remove from current half and future halves
-                        const skipFirst = (q === currentGame.quarter && currentGame.half === 2);
-
-                        if (!skipFirst) {
-                            currentGame.rotationPlan.quarters[q].first =
-                                currentGame.rotationPlan.quarters[q].first.filter(id => id !== playerId);
-                        }
-                        currentGame.rotationPlan.quarters[q].second =
-                            currentGame.rotationPlan.quarters[q].second.filter(id => id !== playerId);
-                    }
-                }
+                // Regenerate rotation for remaining quarters to backfill
+                regenerateRemainingRotation();
             } else {
                 // Add player (late arrival)
                 currentGame.availablePlayers.push(playerId);
