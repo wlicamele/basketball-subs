@@ -1022,41 +1022,108 @@
                 });
 
                 // Build rotation quarter by quarter
+                // Strategy: Spread out best players, save best 5 for Q4 2nd half (closing)
                 for (let q = 1; q <= 4; q++) {
                     const firstHalf = [];
                     const secondHalf = [];
 
-                    // FIRST HALF: Best players who haven't hit their target
-                    const availableFirst = sortedBySkill.filter(p =>
-                        quarterTracking[p.id][q] === 0 && totalHalvesPlayed[p.id] < targetHalves[p.id]
-                    );
+                    if (q === 4) {
+                        // QUARTER 4: Reserve best 5 for 2nd half (closing lineup)
 
-                    for (let i = 0; i < availableFirst.length && firstHalf.length < 5; i++) {
-                        firstHalf.push(availableFirst[i].id);
-                        quarterTracking[availableFirst[i].id][q]++;
-                        totalHalvesPlayed[availableFirst[i].id]++;
-                    }
+                        // Q4 FIRST HALF: Use remaining players who need time
+                        const availableFirst = sortedBySkill.filter(p =>
+                            quarterTracking[p.id][q] === 0 && totalHalvesPlayed[p.id] < targetHalves[p.id]
+                        );
 
-                    // SECOND HALF:
-                    // Priority 1: Players who MUST play this quarter (haven't played yet)
-                    const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
-                    mustPlay.forEach(p => {
-                        if (secondHalf.length < 5) {
-                            secondHalf.push(p.id);
-                            quarterTracking[p.id][q]++;
-                            totalHalvesPlayed[p.id]++;
+                        // Prefer middle-tier players for Q4 1st half, save best for 2nd
+                        const sorted = [...availableFirst].sort((a, b) => {
+                            const aIdx = sortedBySkill.findIndex(p => p.id === a.id);
+                            const bIdx = sortedBySkill.findIndex(p => p.id === b.id);
+                            // Sort by reverse skill for first half (save best for later)
+                            return bIdx - aIdx;
+                        });
+
+                        for (let i = 0; i < sorted.length && firstHalf.length < 5; i++) {
+                            firstHalf.push(sorted[i].id);
+                            quarterTracking[sorted[i].id][q]++;
+                            totalHalvesPlayed[sorted[i].id]++;
                         }
-                    });
 
-                    // Priority 2: Best players who can play both halves (haven't hit target)
-                    const canPlayBoth = sortedBySkill.filter(p =>
-                        firstHalf.includes(p.id) && totalHalvesPlayed[p.id] < targetHalves[p.id]
-                    );
+                        // Q4 SECOND HALF: Best 5 available (closing lineup)
+                        const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
+                        mustPlay.forEach(p => {
+                            if (secondHalf.length < 5) {
+                                secondHalf.push(p.id);
+                                quarterTracking[p.id][q]++;
+                                totalHalvesPlayed[p.id]++;
+                            }
+                        });
 
-                    for (let i = 0; i < canPlayBoth.length && secondHalf.length < 5; i++) {
-                        secondHalf.push(canPlayBoth[i].id);
-                        quarterTracking[canPlayBoth[i].id][q]++;
-                        totalHalvesPlayed[canPlayBoth[i].id]++;
+                        // Fill with best available (prioritize best players)
+                        const bestAvailable = sortedBySkill.filter(p =>
+                            !secondHalf.includes(p.id) &&
+                            totalHalvesPlayed[p.id] < targetHalves[p.id] &&
+                            quarterTracking[p.id][q] === 0
+                        );
+
+                        for (let i = 0; i < bestAvailable.length && secondHalf.length < 5; i++) {
+                            secondHalf.push(bestAvailable[i].id);
+                            quarterTracking[bestAvailable[i].id][q]++;
+                            totalHalvesPlayed[bestAvailable[i].id]++;
+                        }
+
+                    } else {
+                        // QUARTERS 1-3: Spread out playing time, avoid consecutive halves
+
+                        // FIRST HALF: Mix of best players who need time
+                        const availableFirst = sortedBySkill.filter(p =>
+                            quarterTracking[p.id][q] === 0 && totalHalvesPlayed[p.id] < targetHalves[p.id]
+                        );
+
+                        // Alternate best and middle players for balance
+                        for (let i = 0; i < availableFirst.length && firstHalf.length < 5; i++) {
+                            firstHalf.push(availableFirst[i].id);
+                            quarterTracking[availableFirst[i].id][q]++;
+                            totalHalvesPlayed[availableFirst[i].id]++;
+                        }
+
+                        // SECOND HALF: Prioritize players who didn't play first half (avoid consecutive)
+                        const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
+                        mustPlay.forEach(p => {
+                            if (secondHalf.length < 5) {
+                                secondHalf.push(p.id);
+                                quarterTracking[p.id][q]++;
+                                totalHalvesPlayed[p.id]++;
+                            }
+                        });
+
+                        // Fill remaining with best who DIDN'T play first half (avoid consecutive)
+                        const notInFirst = sortedBySkill.filter(p =>
+                            !firstHalf.includes(p.id) &&
+                            !secondHalf.includes(p.id) &&
+                            totalHalvesPlayed[p.id] < targetHalves[p.id]
+                        );
+
+                        for (let i = 0; i < notInFirst.length && secondHalf.length < 5; i++) {
+                            secondHalf.push(notInFirst[i].id);
+                            quarterTracking[notInFirst[i].id][q]++;
+                            totalHalvesPlayed[notInFirst[i].id]++;
+                        }
+
+                        // Last resort: consecutive halves if needed
+                        if (secondHalf.length < 5) {
+                            const canPlayBoth = sortedBySkill.filter(p =>
+                                firstHalf.includes(p.id) &&
+                                !secondHalf.includes(p.id) &&
+                                totalHalvesPlayed[p.id] < targetHalves[p.id]
+                            );
+
+                            for (let i = 0; i < canPlayBoth.length && secondHalf.length < 5; i++) {
+                                secondHalf.push(canPlayBoth[i].id);
+                                quarterTracking[canPlayBoth[i].id][q]++;
+                                totalHalvesPlayed[canPlayBoth[i].id]++;
+                            }
+                        }
                     }
 
                     rotationPlan.quarters[q].first = firstHalf;
