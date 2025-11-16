@@ -834,9 +834,26 @@
                 return;
             }
 
+            // Preserve existing availability if it exists
+            const existingAvailability = rotationPlan?.availability || {};
+
+            // Initialize availability for all players (default to true)
+            const availability = {};
+            players.forEach(p => {
+                availability[p.id] = existingAvailability[p.id] !== undefined ? existingAvailability[p.id] : true;
+            });
+
+            // Filter to only available players
+            const availablePlayers = players.filter(p => availability[p.id] !== false);
+
+            if (availablePlayers.length < 5) {
+                alert('You need at least 5 available players to generate a rotation plan.');
+                return;
+            }
+
             // Create rotation ensuring: best players get most time, everyone plays ≥1 half/quarter
             // Sort by skill level (best to worst)
-            const sortedBySkill = [...players].sort((a, b) => {
+            const sortedBySkill = [...availablePlayers].sort((a, b) => {
                 const totalA = a.skills.handling + a.skills.shooting + a.skills.defense;
                 const totalB = b.skills.handling + b.skills.shooting + b.skills.defense;
                 return totalB - totalA;
@@ -844,9 +861,10 @@
 
             const totalPlayers = sortedBySkill.length;
 
-            // Initialize rotation plan
+            // Initialize rotation plan with availability preserved
             rotationPlan = {
                 players: sortedBySkill.map(p => p.id),
+                availability: availability,
                 quarters: {
                     1: { first: [], second: [] },
                     2: { first: [], second: [] },
@@ -1065,16 +1083,8 @@
 
             rotationPlan.availability[playerId] = !rotationPlan.availability[playerId];
 
-            // If player is now unavailable, remove them from all quarters
-            if (!rotationPlan.availability[playerId]) {
-                for (let q = 1; q <= 4; q++) {
-                    rotationPlan.quarters[q].first = rotationPlan.quarters[q].first.filter(id => id !== playerId);
-                    rotationPlan.quarters[q].second = rotationPlan.quarters[q].second.filter(id => id !== playerId);
-                }
-            }
-
-            localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
-            renderRotationPlan();
+            // Regenerate the rotation plan with updated availability
+            generateRotationPlan();
         }
 
         function toggleRotation(playerId, quarter, half) {
