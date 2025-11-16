@@ -2019,11 +2019,22 @@
                     };
                 }
 
-                // Update rotation plan: intelligently add to remaining quarters
+                // Update rotation plan: intelligently add to remaining quarters respecting max halves
                 if (currentGame.rotationPlan) {
                     const latePlayer = players.find(p => p.id === playerId);
                     if (latePlayer) {
                         const latePlayerSkill = latePlayer.skills.handling + latePlayer.skills.shooting + latePlayer.skills.defense;
+
+                        // Determine max halves based on total available players
+                        const totalAvailable = currentGame.availablePlayers.length;
+                        let maxHalves;
+                        if (totalAvailable === 10) maxHalves = 4;
+                        else if (totalAvailable >= 8) maxHalves = 5;
+                        else if (totalAvailable === 7) maxHalves = 6;
+                        else maxHalves = 8; // 5-6 players, no max
+
+                        // Track how many halves late player will be in
+                        let latePlayerHalves = 0;
 
                         // Find available players and their skills
                         const availablePlayers = currentGame.availablePlayers
@@ -2037,12 +2048,16 @@
                             return totalA - totalB;
                         });
 
-                        // Try to replace lower-skilled players in future quarters
-                        for (let q = currentGame.quarter; q <= 4; q++) {
+                        // Calculate remaining quarters
+                        const remainingQuarters = 4 - currentGame.quarter + 1;
+                        const targetHalves = Math.min(maxHalves, remainingQuarters); // Can't exceed remaining quarters
+
+                        // Try to replace lower-skilled players in future quarters up to max
+                        for (let q = currentGame.quarter; q <= 4 && latePlayerHalves < targetHalves; q++) {
                             const skipFirst = (q === currentGame.quarter && currentGame.half === 2);
 
-                            // Try to swap into first half
-                            if (!skipFirst) {
+                            // Try to swap into first half if we haven't hit limit
+                            if (!skipFirst && latePlayerHalves < targetHalves) {
                                 for (let i = 0; i < sortedBySkill.length; i++) {
                                     const playerToReplace = sortedBySkill[i];
                                     const replaceSkill = playerToReplace.skills.handling + playerToReplace.skills.shooting + playerToReplace.skills.defense;
@@ -2052,22 +2067,26 @@
                                         // Replace lower-skilled player
                                         const idx = currentGame.rotationPlan.quarters[q].first.indexOf(playerToReplace.id);
                                         currentGame.rotationPlan.quarters[q].first[idx] = playerId;
+                                        latePlayerHalves++;
                                         break;
                                     }
                                 }
                             }
 
-                            // Try to swap into second half
-                            for (let i = 0; i < sortedBySkill.length; i++) {
-                                const playerToReplace = sortedBySkill[i];
-                                const replaceSkill = playerToReplace.skills.handling + playerToReplace.skills.shooting + playerToReplace.skills.defense;
+                            // Try to swap into second half if we haven't hit limit
+                            if (latePlayerHalves < targetHalves) {
+                                for (let i = 0; i < sortedBySkill.length; i++) {
+                                    const playerToReplace = sortedBySkill[i];
+                                    const replaceSkill = playerToReplace.skills.handling + playerToReplace.skills.shooting + playerToReplace.skills.defense;
 
-                                if (latePlayerSkill > replaceSkill &&
-                                    currentGame.rotationPlan.quarters[q].second.includes(playerToReplace.id)) {
-                                    // Replace lower-skilled player
-                                    const idx = currentGame.rotationPlan.quarters[q].second.indexOf(playerToReplace.id);
-                                    currentGame.rotationPlan.quarters[q].second[idx] = playerId;
-                                    break;
+                                    if (latePlayerSkill > replaceSkill &&
+                                        currentGame.rotationPlan.quarters[q].second.includes(playerToReplace.id)) {
+                                        // Replace lower-skilled player
+                                        const idx = currentGame.rotationPlan.quarters[q].second.indexOf(playerToReplace.id);
+                                        currentGame.rotationPlan.quarters[q].second[idx] = playerId;
+                                        latePlayerHalves++;
+                                        break;
+                                    }
                                 }
                             }
                         }
