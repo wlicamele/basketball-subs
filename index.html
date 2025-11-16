@@ -803,12 +803,19 @@
                 return;
             }
 
-            // Create balanced rotation ensuring everyone plays at least half of each quarter
-            const sortedPlayers = [...players].sort((a, b) => a.number - b.number);
+            // Create rotation ensuring: best players get most time, everyone plays ≥1 half/quarter
+            // Sort by skill level (best to worst)
+            const sortedBySkill = [...players].sort((a, b) => {
+                const totalA = a.skills.handling + a.skills.shooting + a.skills.defense;
+                const totalB = b.skills.handling + b.skills.shooting + b.skills.defense;
+                return totalB - totalA;
+            });
+
+            const totalPlayers = sortedBySkill.length;
 
             // Initialize rotation plan
             rotationPlan = {
-                players: sortedPlayers.map(p => p.id),
+                players: sortedBySkill.map(p => p.id),
                 quarters: {
                     1: { first: [], second: [] },
                     2: { first: [], second: [] },
@@ -817,42 +824,130 @@
                 }
             };
 
-            // Algorithm: Rotate players ensuring balanced skill distribution
-            // Each player must play at least 1 half per quarter
-            const totalPlayers = sortedPlayers.length;
-            let playerIndex = 0;
+            // Strategy based on player count:
+            // - Best players should appear in more halves
+            // - Everyone must play at least 1 half per quarter (4 halves minimum)
+            // - Total player-halves needed: 8 halves × 5 positions = 40
 
-            for (let quarter = 1; quarter <= 4; quarter++) {
-                // First half
-                const firstHalf = [];
-                for (let i = 0; i < 5 && i < totalPlayers; i++) {
-                    firstHalf.push(sortedPlayers[(playerIndex + i) % totalPlayers].id);
+            if (totalPlayers <= 5) {
+                // 5 or fewer players: everyone plays all halves
+                for (let q = 1; q <= 4; q++) {
+                    rotationPlan.quarters[q].first = sortedBySkill.map(p => p.id);
+                    rotationPlan.quarters[q].second = sortedBySkill.map(p => p.id);
                 }
-                rotationPlan.quarters[quarter].first = firstHalf;
+            } else if (totalPlayers <= 7) {
+                // 6-7 players: Best players play more, rotate bottom players
+                // Top players (0-2): play 6-7 halves
+                // Middle players (3-4): play 5 halves
+                // Bottom players (5-6): play 4 halves (minimum)
 
-                // Second half - rotate some players
-                const secondHalf = [];
-                const keepPlayers = Math.min(2, firstHalf.length); // Keep 2-3 players for continuity
+                for (let q = 1; q <= 4; q++) {
+                    const firstHalf = [];
+                    const secondHalf = [];
 
-                // Keep some players from first half
-                for (let i = 0; i < keepPlayers; i++) {
-                    secondHalf.push(firstHalf[i]);
-                }
+                    // Always include top 2 players in first half
+                    firstHalf.push(sortedBySkill[0].id);
+                    firstHalf.push(sortedBySkill[1].id);
 
-                // Add new players for second half
-                let addIndex = keepPlayers;
-                while (secondHalf.length < 5 && secondHalf.length < totalPlayers) {
-                    const nextPlayer = sortedPlayers[(playerIndex + firstHalf.length + addIndex - keepPlayers) % totalPlayers].id;
-                    if (!secondHalf.includes(nextPlayer)) {
-                        secondHalf.push(nextPlayer);
+                    // Best player plays both halves for continuity
+                    secondHalf.push(sortedBySkill[0].id);
+
+                    if (totalPlayers >= 3) {
+                        // Rotate 3rd best player (plays 6/8 halves)
+                        if (q !== 2) {
+                            firstHalf.push(sortedBySkill[2].id);
+                        }
+                        if (q !== 4) {
+                            secondHalf.push(sortedBySkill[2].id);
+                        }
                     }
-                    addIndex++;
+
+                    if (totalPlayers >= 4) {
+                        // 4th player (plays 5/8 halves)
+                        if (q % 2 === 1) {
+                            firstHalf.push(sortedBySkill[3].id);
+                            secondHalf.push(sortedBySkill[3].id);
+                        } else {
+                            firstHalf.push(sortedBySkill[3].id);
+                        }
+                    }
+
+                    if (totalPlayers >= 5) {
+                        // 5th player (plays 5/8 halves)
+                        if (q % 2 === 0) {
+                            firstHalf.push(sortedBySkill[4].id);
+                            secondHalf.push(sortedBySkill[4].id);
+                        } else {
+                            secondHalf.push(sortedBySkill[4].id);
+                        }
+                    }
+
+                    // Bottom 2 players (5th and 6th): play minimum 4/8 halves (1 per quarter)
+                    if (totalPlayers >= 6) {
+                        if (q <= 2) {
+                            firstHalf.push(sortedBySkill[5].id);
+                        } else {
+                            secondHalf.push(sortedBySkill[5].id);
+                        }
+                    }
+
+                    if (totalPlayers >= 7) {
+                        if (q <= 2) {
+                            secondHalf.push(sortedBySkill[6].id);
+                        } else {
+                            firstHalf.push(sortedBySkill[6].id);
+                        }
+                    }
+
+                    // Fill remaining spots to ensure 5 players per half
+                    while (firstHalf.length < Math.min(5, totalPlayers)) {
+                        for (let i = 0; i < totalPlayers; i++) {
+                            if (!firstHalf.includes(sortedBySkill[i].id) && firstHalf.length < 5) {
+                                firstHalf.push(sortedBySkill[i].id);
+                            }
+                        }
+                    }
+
+                    while (secondHalf.length < Math.min(5, totalPlayers)) {
+                        for (let i = 0; i < totalPlayers; i++) {
+                            if (!secondHalf.includes(sortedBySkill[i].id) && secondHalf.length < 5) {
+                                secondHalf.push(sortedBySkill[i].id);
+                            }
+                        }
+                    }
+
+                    rotationPlan.quarters[q].first = firstHalf;
+                    rotationPlan.quarters[q].second = secondHalf;
                 }
+            } else {
+                // 8+ players: Simple rotation ensuring everyone plays at least once per quarter
+                let playerIndex = 0;
+                for (let q = 1; q <= 4; q++) {
+                    const firstHalf = [];
+                    const secondHalf = [];
 
-                rotationPlan.quarters[quarter].second = secondHalf;
+                    // First half: top skilled players
+                    for (let i = 0; i < 5; i++) {
+                        firstHalf.push(sortedBySkill[(playerIndex + i) % totalPlayers].id);
+                    }
 
-                // Rotate starting position for next quarter
-                playerIndex = (playerIndex + 3) % totalPlayers;
+                    // Second half: rotate, keep 2 for continuity
+                    secondHalf.push(firstHalf[0]);
+                    secondHalf.push(firstHalf[1]);
+
+                    // Add different players
+                    for (let i = 5; i < 8 && secondHalf.length < 5; i++) {
+                        const nextPlayer = sortedBySkill[(playerIndex + i) % totalPlayers].id;
+                        if (!secondHalf.includes(nextPlayer)) {
+                            secondHalf.push(nextPlayer);
+                        }
+                    }
+
+                    rotationPlan.quarters[q].first = firstHalf;
+                    rotationPlan.quarters[q].second = secondHalf;
+
+                    playerIndex = (playerIndex + 2) % totalPlayers;
+                }
             }
 
             localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
