@@ -1017,7 +1017,7 @@
                     <input type="checkbox"
                            id="rotation-avail-${player.id}"
                            ${isAvailable ? 'checked' : ''}
-                           onchange="togglePlayerAvailability(${player.id})"
+                           onchange="toggleRotationAvailability(${player.id})"
                            style="margin-right: 8px; width: auto; cursor: pointer;">
                     <label for="rotation-avail-${player.id}" style="cursor: pointer;">
                         #${player.number} ${player.name}
@@ -1053,7 +1053,7 @@
             gridDiv.innerHTML = html;
         }
 
-        function togglePlayerAvailability(playerId) {
+        function toggleRotationAvailability(playerId) {
             if (!rotationPlan) return;
 
             if (!rotationPlan.availability) {
