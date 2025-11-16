@@ -1274,7 +1274,14 @@
             rotationPlan.availability[playerId] = !rotationPlan.availability[playerId];
 
             // Regenerate the rotation plan with updated availability
-            generateRotationPlan();
+            // If Q1 1st half is already populated, regenerate the full rotation
+            if (rotationPlan.quarters[1].first.length === 5) {
+                fillRestOfRotation();
+                renderRotationGrid();
+            } else {
+                // Just regenerate Q1 1st half recommendations
+                generateRotationPlan();
+            }
         }
 
         function toggleRotation(playerId, quarter, half) {
