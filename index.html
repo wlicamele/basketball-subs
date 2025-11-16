@@ -1050,8 +1050,9 @@
                         }
 
                         // Q4 SECOND HALF: Best 5 available (closing lineup)
-                        const mustPlay = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
-                        mustPlay.forEach(p => {
+                        // First ensure everyone plays at least 1 half in Q4
+                        const mustPlayQ4 = sortedBySkill.filter(p => quarterTracking[p.id][q] === 0);
+                        mustPlayQ4.forEach(p => {
                             if (secondHalf.length < 5) {
                                 secondHalf.push(p.id);
                                 quarterTracking[p.id][q]++;
@@ -1059,17 +1060,26 @@
                             }
                         });
 
-                        // Fill with best available (prioritize best players)
-                        const bestAvailable = sortedBySkill.filter(p =>
+                        // Fill remaining spots with best available players (already sorted by skill)
+                        const eligibleForClosing = sortedBySkill.filter(p =>
                             !secondHalf.includes(p.id) &&
-                            totalHalvesPlayed[p.id] < targetHalves[p.id] &&
-                            quarterTracking[p.id][q] === 0
+                            totalHalvesPlayed[p.id] < targetHalves[p.id]
                         );
 
-                        for (let i = 0; i < bestAvailable.length && secondHalf.length < 5; i++) {
-                            secondHalf.push(bestAvailable[i].id);
-                            quarterTracking[bestAvailable[i].id][q]++;
-                            totalHalvesPlayed[bestAvailable[i].id]++;
+                        for (let i = 0; i < eligibleForClosing.length && secondHalf.length < 5; i++) {
+                            secondHalf.push(eligibleForClosing[i].id);
+                            quarterTracking[eligibleForClosing[i].id][q]++;
+                            totalHalvesPlayed[eligibleForClosing[i].id]++;
+                        }
+
+                        // Safety: if still not 5, add anyone available (ignore target halves)
+                        if (secondHalf.length < 5) {
+                            const anyAvailable = sortedBySkill.filter(p => !secondHalf.includes(p.id));
+                            for (let i = 0; i < anyAvailable.length && secondHalf.length < 5; i++) {
+                                secondHalf.push(anyAvailable[i].id);
+                                quarterTracking[anyAvailable[i].id][q]++;
+                                totalHalvesPlayed[anyAvailable[i].id]++;
+                            }
                         }
 
                     } else {
@@ -1303,14 +1313,23 @@
 
                         const bestAvailable = sortedBySkill.filter(p =>
                             !secondHalf.includes(p.id) &&
-                            halvesSoFar[p.id] < targetHalves[p.id] &&
-                            quarterTracking[p.id][q] === 0
+                            halvesSoFar[p.id] < targetHalves[p.id]
                         );
 
                         for (let i = 0; i < bestAvailable.length && secondHalf.length < 5; i++) {
                             secondHalf.push(bestAvailable[i].id);
                             quarterTracking[bestAvailable[i].id][q]++;
                             halvesSoFar[bestAvailable[i].id]++;
+                        }
+
+                        // Safety: if still not 5, add anyone available (ignore target halves)
+                        if (secondHalf.length < 5) {
+                            const anyAvailable = sortedBySkill.filter(p => !secondHalf.includes(p.id));
+                            for (let i = 0; i < anyAvailable.length && secondHalf.length < 5; i++) {
+                                secondHalf.push(anyAvailable[i].id);
+                                quarterTracking[anyAvailable[i].id][q]++;
+                                halvesSoFar[anyAvailable[i].id]++;
+                            }
                         }
                     } else {
                         // Other quarters: avoid consecutive halves
