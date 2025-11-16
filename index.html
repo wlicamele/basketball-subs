@@ -524,8 +524,7 @@
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('roster')">Roster</button>
-            <button class="tab" onclick="switchTab('rotation')">Rotation Plan</button>
-            <button class="tab" onclick="switchTab('game')">Game</button>
+            <button class="tab" onclick="switchTab('game')">Game & Rotation</button>
             <button class="tab" onclick="switchTab('history')">History</button>
         </div>
 
@@ -543,26 +542,26 @@
                 <div id="player-list"></div>
             </div>
 
-            <!-- ROTATION PLAN TAB -->
-            <div id="rotation-tab" class="tab-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div>
-                        <h2>Rotation Planner</h2>
-                        <p style="color: #6c757d; margin-top: 4px;">Plan your substitutions for the entire game</p>
-                    </div>
-                    <button class="btn" onclick="generateRotationPlan()">🔄 Auto-Generate Plan</button>
-                </div>
-                <div id="rotation-grid"></div>
-            </div>
-
-            <!-- GAME TAB -->
+            <!-- GAME TAB (merged with rotation) -->
             <div id="game-tab" class="tab-content">
-                <div id="no-game-state" style="display: none;">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🏀</div>
-                        <h3>No Active Game</h3>
-                        <p style="margin: 16px 0;">Start a new game to manage substitutions</p>
-                        <button class="btn" onclick="openNewGameModal()">Start New Game</button>
+                <div id="no-game-state">
+                    <div style="margin-bottom: 20px;">
+                        <h2>Game & Rotation Plan</h2>
+                        <p style="color: #6c757d; margin-top: 4px;">Plan your rotation and manage the game</p>
+                    </div>
+
+                    <div id="pre-game-rotation">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3>1. Create Rotation Plan</h3>
+                            <button class="btn btn-secondary" onclick="generateRotationPlan()">🔄 Auto-Generate</button>
+                        </div>
+                        <div id="rotation-grid"></div>
+
+                        <div style="margin-top: 24px;">
+                            <button class="btn" onclick="openNewGameModal()" style="width: 100%; padding: 16px; font-size: 18px;">
+                                ▶️ Start Game with This Rotation
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -574,8 +573,8 @@
                                 <div class="status-value" id="current-quarter">1</div>
                             </div>
                             <div class="status-item">
-                                <div class="status-label">Time</div>
-                                <div class="status-value" id="game-time">12:00</div>
+                                <div class="status-label">Half</div>
+                                <div class="status-value" id="current-half">1st</div>
                             </div>
                             <div class="status-item">
                                 <div class="status-label">On Court</div>
@@ -585,12 +584,23 @@
                         <div class="control-buttons">
                             <button class="btn" onclick="suggestSubstitutions()">💡 Suggest Subs</button>
                             <button class="btn btn-secondary" onclick="manageAvailability()">👥 Manage Players</button>
-                            <button class="btn btn-success" onclick="nextQuarter()">Next Quarter</button>
+                            <button class="btn btn-success" onclick="advanceHalf()">Next Half ▶️</button>
                             <button class="btn btn-danger btn-small" onclick="endGame()">End Game</button>
                         </div>
                     </div>
 
                     <div id="substitution-alerts"></div>
+
+                    <!-- Rotation Grid During Game -->
+                    <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 style="margin: 0;">Rotation Plan</h3>
+                            <button class="btn btn-small btn-secondary" onclick="toggleRotationView()">
+                                <span id="rotation-toggle-text">Hide</span> Plan
+                            </button>
+                        </div>
+                        <div id="in-game-rotation-grid"></div>
+                    </div>
 
                     <div class="court-view">
                         <div class="court-title">ON COURT (5 players)</div>
@@ -653,15 +663,27 @@
 
     <!-- New Game Modal -->
     <div id="new-game-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2 class="modal-title">Start New Game</h2>
                 <button class="close-modal" onclick="closeNewGameModal()">&times;</button>
             </div>
-            <p style="margin-bottom: 16px;">Select available players for this game:</p>
-            <div id="player-availability-list" class="availability-list"></div>
+
+            <div style="margin-bottom: 24px;">
+                <h3 style="margin-bottom: 12px;">1. Select Available Players</h3>
+                <div id="player-availability-list" class="availability-list"></div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <h3 style="margin-bottom: 12px;">2. Choose Starting 5 (First Half of Q1)</h3>
+                <p style="font-size: 14px; color: #6c757d; margin-bottom: 12px;">
+                    Click to select/deselect. Selected players will start the game.
+                </p>
+                <div id="starting-lineup-list"></div>
+            </div>
+
             <div style="display: flex; gap: 12px; margin-top: 24px;">
-                <button class="btn" style="flex: 1;" onclick="startNewGame()">Start Game</button>
+                <button class="btn" style="flex: 1;" onclick="startNewGame()">▶️ Start Game</button>
                 <button class="btn btn-secondary" onclick="closeNewGameModal()">Cancel</button>
             </div>
         </div>
@@ -715,12 +737,16 @@
         let gameHistory = JSON.parse(localStorage.getItem('gameHistory')) || [];
         let rotationPlan = JSON.parse(localStorage.getItem('rotationPlan')) || null;
         let editingPlayerId = null;
+        let selectedStarters = [];
+        let rotationViewVisible = true;
 
         // Initialize
         renderPlayers();
         renderGame();
         renderHistory();
-        renderRotationPlan();
+        if (!currentGame) {
+            renderRotationPlan();
+        }
 
         // CSV Loading
         async function loadPlayersFromCSV() {
@@ -791,9 +817,14 @@
             event.target.classList.add('active');
             document.getElementById(`${tabName}-tab`).classList.add('active');
 
-            if (tabName === 'game') renderGame();
+            if (tabName === 'game') {
+                if (currentGame) {
+                    renderGame();
+                } else {
+                    renderRotationPlan();
+                }
+            }
             if (tabName === 'history') renderHistory();
-            if (tabName === 'rotation') renderRotationPlan();
         }
 
         // Rotation Planner
@@ -1123,35 +1154,93 @@
 
         // Game Management
         function openNewGameModal() {
-            const list = document.getElementById('player-availability-list');
-
             if (players.length === 0) {
                 alert('Add players to your roster first!');
                 switchTab('roster');
                 return;
             }
 
-            list.innerHTML = players
+            // Get suggested starting lineup from rotation plan
+            let suggestedStarters = [];
+            if (rotationPlan && rotationPlan.quarters && rotationPlan.quarters[1]) {
+                suggestedStarters = rotationPlan.quarters[1].first || [];
+            }
+
+            // Availability list
+            const availList = document.getElementById('player-availability-list');
+            availList.innerHTML = players
                 .sort((a, b) => a.number - b.number)
                 .map(player => `
                     <div class="availability-item">
-                        <input type="checkbox" id="avail-${player.id}" checked>
+                        <input type="checkbox" id="avail-${player.id}" checked onchange="updateStartingLineup()">
                         <label for="avail-${player.id}">
                             <strong>#${player.number} ${player.name}</strong>
                         </label>
                     </div>
                 `).join('');
 
+            // Initialize selected starters from rotation plan or default
+            selectedStarters = suggestedStarters.length > 0 ? [...suggestedStarters] : [];
+
+            updateStartingLineup();
             document.getElementById('new-game-modal').classList.add('active');
+        }
+
+        function updateStartingLineup() {
+            const availablePlayers = players.filter(player =>
+                document.getElementById(`avail-${player.id}`)?.checked
+            );
+
+            const startersList = document.getElementById('starting-lineup-list');
+
+            if (availablePlayers.length === 0) {
+                startersList.innerHTML = '<p style="color: #6c757d;">Select available players first</p>';
+                return;
+            }
+
+            startersList.innerHTML = availablePlayers
+                .sort((a, b) => a.number - b.number)
+                .map(player => {
+                    const isSelected = selectedStarters.includes(player.id);
+                    return `
+                        <div class="availability-item" style="cursor: pointer; ${isSelected ? 'background: #d4edda; border: 2px solid #28a745;' : ''}"
+                             onclick="toggleStarter(${player.id})">
+                            <span style="display: inline-block; width: 24px; font-weight: bold;">
+                                ${isSelected ? '✓' : '○'}
+                            </span>
+                            <strong>#${player.number} ${player.name}</strong>
+                            ${isSelected ? '<span style="color: #28a745; margin-left: 8px; font-size: 12px;">STARTING</span>' : ''}
+                        </div>
+                    `;
+                }).join('');
+
+            startersList.innerHTML += `<p style="margin-top: 12px; font-size: 14px; color: ${selectedStarters.length === 5 ? '#28a745' : '#dc3545'}; font-weight: 600;">
+                Selected: ${selectedStarters.length}/5 players
+            </p>`;
+        }
+
+        function toggleStarter(playerId) {
+            const index = selectedStarters.indexOf(playerId);
+            if (index >= 0) {
+                selectedStarters.splice(index, 1);
+            } else {
+                if (selectedStarters.length < 5) {
+                    selectedStarters.push(playerId);
+                } else {
+                    alert('You can only have 5 starting players!');
+                }
+            }
+            updateStartingLineup();
         }
 
         function closeNewGameModal() {
             document.getElementById('new-game-modal').classList.remove('active');
+            selectedStarters = [];
         }
 
         function startNewGame() {
             const availablePlayers = players.filter(player =>
-                document.getElementById(`avail-${player.id}`).checked
+                document.getElementById(`avail-${player.id}`)?.checked
             );
 
             if (availablePlayers.length < 5) {
@@ -1159,44 +1248,32 @@
                 return;
             }
 
-            // Create balanced starting lineup by distributing skills evenly
-            // Don't just pick top 5 - alternate high/low skills for balance
-            const sorted = [...availablePlayers].sort((a, b) => {
-                const totalA = a.skills.handling + a.skills.shooting + a.skills.defense;
-                const totalB = b.skills.handling + b.skills.shooting + b.skills.defense;
-                return totalB - totalA;
-            });
-
-            // Alternate selection: pick 1st, 4th, 6th, 8th, 10th (spread skill levels)
-            const starting = [];
-            const indicesToPick = [0, 3, 5, 7, 9]; // Distributed indices
-            indicesToPick.forEach(idx => {
-                if (idx < sorted.length && starting.length < 5) {
-                    starting.push(sorted[idx].id);
-                }
-            });
-
-            // Fill remaining starting spots if less than 5
-            for (let i = 0; i < sorted.length && starting.length < 5; i++) {
-                if (!starting.includes(sorted[i].id)) {
-                    starting.push(sorted[i].id);
-                }
+            if (selectedStarters.length !== 5) {
+                alert('Please select exactly 5 starting players!');
+                return;
             }
+
+            // Use manually selected starters
+            const starting = [...selectedStarters];
 
             currentGame = {
                 id: Date.now(),
                 startTime: new Date().toISOString(),
                 quarter: 1,
+                half: 1, // Track which half (1 or 2)
                 onCourt: starting,
                 availablePlayers: availablePlayers.map(p => p.id),
                 quarterStartTime: Date.now(),
-                playerStats: {}
+                halfStartTime: Date.now(),
+                playerStats: {},
+                rotationPlan: rotationPlan // Save rotation plan with game
             };
 
             // Initialize stats
             availablePlayers.forEach(player => {
                 currentGame.playerStats[player.id] = {
                     quarters: {1: 0, 2: 0, 3: 0, 4: 0},
+                    halves: {}, // Track time per half
                     totalTime: 0,
                     arrivedLate: false
                 };
@@ -1224,11 +1301,144 @@
             document.getElementById('active-game-state').style.display = 'block';
 
             document.getElementById('current-quarter').textContent = currentGame.quarter;
+            document.getElementById('current-half').textContent = currentGame.half === 1 ? '1st' : '2nd';
             document.getElementById('on-court-count').textContent = currentGame.onCourt.length;
 
             renderCourt();
             renderBench();
+            renderInGameRotationGrid();
             checkSubstitutionAlerts();
+        }
+
+        function renderInGameRotationGrid() {
+            const gridDiv = document.getElementById('in-game-rotation-grid');
+
+            if (!rotationViewVisible) {
+                gridDiv.style.display = 'none';
+                return;
+            }
+
+            gridDiv.style.display = 'block';
+
+            if (!currentGame.rotationPlan) {
+                gridDiv.innerHTML = '<p style="color: #6c757d;">No rotation plan available</p>';
+                return;
+            }
+
+            const plan = currentGame.rotationPlan;
+
+            // Build compact rotation grid
+            let html = '<div class="rotation-grid"><table class="rotation-table" style="font-size: 12px;">';
+
+            html += '<thead><tr><th style="font-size: 11px;">Player</th>';
+            for (let q = 1; q <= 4; q++) {
+                const isCurrentQ = q === currentGame.quarter;
+                html += `<th colspan="2" style="background: ${isCurrentQ ? '#e74c3c' : '#764ba2'}; font-size: 11px;">Q${q}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            const sortedPlayers = [...players].sort((a, b) => a.number - b.number);
+            sortedPlayers.forEach(player => {
+                if (!currentGame.availablePlayers.includes(player.id)) return;
+
+                html += '<tr>';
+                html += `<td class="player-cell" style="font-size: 11px;">#${player.number} ${player.name}</td>`;
+
+                for (let q = 1; q <= 4; q++) {
+                    const firstHalf = plan.quarters[q].first.includes(player.id);
+                    const secondHalf = plan.quarters[q].second.includes(player.id);
+
+                    const isCurrentQH = q === currentGame.quarter && currentGame.half === 1;
+                    const isCurrentQ2 = q === currentGame.quarter && currentGame.half === 2;
+
+                    html += `<td class="${firstHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQH ? 'border: 3px solid #e74c3c;' : ''}">
+                        ${firstHalf ? '✓' : '—'}
+                    </td>`;
+                    html += `<td class="${secondHalf ? 'playing' : 'bench'}" style="font-size: 11px; ${isCurrentQ2 ? 'border: 3px solid #e74c3c;' : ''}">
+                        ${secondHalf ? '✓' : '—'}
+                    </td>`;
+                }
+
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            gridDiv.innerHTML = html;
+        }
+
+        function toggleRotationView() {
+            rotationViewVisible = !rotationViewVisible;
+            document.getElementById('rotation-toggle-text').textContent = rotationViewVisible ? 'Hide' : 'Show';
+            renderInGameRotationGrid();
+        }
+
+        function advanceHalf() {
+            // Update time for current on-court players
+            currentGame.onCourt.forEach(playerId => {
+                const stats = currentGame.playerStats[playerId];
+                if (stats.lastSubIn) {
+                    const timeOnCourt = (Date.now() - stats.lastSubIn) / 1000;
+                    stats.quarters[currentGame.quarter] += timeOnCourt;
+                    stats.totalTime += timeOnCourt;
+                    stats.lastSubIn = Date.now(); // Reset for next half
+                }
+            });
+
+            if (currentGame.half === 1) {
+                // Move to 2nd half of same quarter
+                currentGame.half = 2;
+                currentGame.halfStartTime = Date.now();
+
+                // Suggest rotation based on plan
+                if (currentGame.rotationPlan) {
+                    const suggestedPlayers = currentGame.rotationPlan.quarters[currentGame.quarter].second;
+                    if (suggestedPlayers && suggestedPlayers.length > 0) {
+                        if (confirm(`Switch to 2nd half lineup?\n\nSuggested lineup from rotation plan:\n${suggestedPlayers.map(id => {
+                            const p = players.find(player => player.id === id);
+                            return p ? `#${p.number} ${p.name}` : '';
+                        }).filter(n => n).join(', ')}\n\nClick OK to auto-substitute, or Cancel to manage manually.`)) {
+                            // Auto-substitute to suggested lineup
+                            currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
+                            currentGame.onCourt.forEach(playerId => {
+                                currentGame.playerStats[playerId].lastSubIn = Date.now();
+                            });
+                        }
+                    }
+                }
+            } else {
+                // Move to next quarter
+                if (currentGame.quarter >= 4) {
+                    if (confirm('Game is complete! End the game?')) {
+                        endGame();
+                        return;
+                    }
+                    return;
+                }
+
+                currentGame.quarter++;
+                currentGame.half = 1;
+                currentGame.quarterStartTime = Date.now();
+                currentGame.halfStartTime = Date.now();
+
+                // Suggest rotation for new quarter
+                if (currentGame.rotationPlan) {
+                    const suggestedPlayers = currentGame.rotationPlan.quarters[currentGame.quarter].first;
+                    if (suggestedPlayers && suggestedPlayers.length > 0) {
+                        if (confirm(`Start Quarter ${currentGame.quarter}?\n\nSuggested lineup from rotation plan:\n${suggestedPlayers.map(id => {
+                            const p = players.find(player => player.id === id);
+                            return p ? `#${p.number} ${p.name}` : '';
+                        }).filter(n => n).join(', ')}\n\nClick OK to auto-substitute, or Cancel to manage manually.`)) {
+                            currentGame.onCourt = suggestedPlayers.filter(id => currentGame.availablePlayers.includes(id)).slice(0, 5);
+                            currentGame.onCourt.forEach(playerId => {
+                                currentGame.playerStats[playerId].lastSubIn = Date.now();
+                            });
+                        }
+                    }
+                }
+            }
+
+            localStorage.setItem('currentGame', JSON.stringify(currentGame));
+            renderGame();
         }
 
         function renderCourt() {
