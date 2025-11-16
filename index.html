@@ -985,6 +985,14 @@
                 return;
             }
 
+            // Initialize availability tracking if not exists
+            if (!rotationPlan.availability) {
+                rotationPlan.availability = {};
+                players.forEach(p => {
+                    rotationPlan.availability[p.id] = true; // Default all checked
+                });
+            }
+
             // Build table
             let html = '<div class="rotation-grid"><table class="rotation-table">';
 
@@ -1002,19 +1010,36 @@
             // Player rows
             const sortedPlayers = [...players].sort((a, b) => a.number - b.number);
             sortedPlayers.forEach(player => {
+                const isAvailable = rotationPlan.availability[player.id] !== false;
+
                 html += '<tr>';
-                html += `<td class="player-cell">#${player.number} ${player.name}</td>`;
+                html += `<td class="player-cell" style="padding: 8px;">
+                    <input type="checkbox"
+                           id="rotation-avail-${player.id}"
+                           ${isAvailable ? 'checked' : ''}
+                           onchange="togglePlayerAvailability(${player.id})"
+                           style="margin-right: 8px; width: auto; cursor: pointer;">
+                    <label for="rotation-avail-${player.id}" style="cursor: pointer;">
+                        #${player.number} ${player.name}
+                    </label>
+                </td>`;
 
                 for (let q = 1; q <= 4; q++) {
                     const firstHalf = rotationPlan.quarters[q].first.includes(player.id);
                     const secondHalf = rotationPlan.quarters[q].second.includes(player.id);
 
-                    html += `<td class="${firstHalf ? 'playing' : 'bench'}" onclick="toggleRotation(${player.id}, ${q}, 'first')">
-                        ${firstHalf ? '✓' : '—'}
-                    </td>`;
-                    html += `<td class="${secondHalf ? 'playing' : 'bench'}" onclick="toggleRotation(${player.id}, ${q}, 'second')">
-                        ${secondHalf ? '✓' : '—'}
-                    </td>`;
+                    // If not available, show red X
+                    if (!isAvailable) {
+                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">✗</td>`;
+                        html += `<td style="background: #ffebee; color: #c62828; cursor: not-allowed; font-weight: bold;">✗</td>`;
+                    } else {
+                        html += `<td class="${firstHalf ? 'playing' : 'bench'}" onclick="toggleRotation(${player.id}, ${q}, 'first')">
+                            ${firstHalf ? '✓' : '—'}
+                        </td>`;
+                        html += `<td class="${secondHalf ? 'playing' : 'bench'}" onclick="toggleRotation(${player.id}, ${q}, 'second')">
+                            ${secondHalf ? '✓' : '—'}
+                        </td>`;
+                    }
                 }
 
                 html += '</tr>';
@@ -1022,10 +1047,25 @@
 
             html += '</tbody></table></div>';
             html += '<div style="margin-top: 16px; padding: 12px; background: #e7f3ff; border-radius: 6px; font-size: 14px;">';
-            html += '<strong>Legend:</strong> ✓ = Playing (green) | — = On bench (yellow) | Click cells to toggle';
+            html += '<strong>Legend:</strong> ☑ Available | ☐ Not Available (red ✗) | ✓ = Playing (green) | — = Bench (yellow) | Click cells to toggle';
             html += '</div>';
 
             gridDiv.innerHTML = html;
+        }
+
+        function togglePlayerAvailability(playerId) {
+            if (!rotationPlan) return;
+
+            if (!rotationPlan.availability) {
+                rotationPlan.availability = {};
+                players.forEach(p => {
+                    rotationPlan.availability[p.id] = true;
+                });
+            }
+
+            rotationPlan.availability[playerId] = !rotationPlan.availability[playerId];
+            localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
+            renderRotationPlan();
         }
 
         function toggleRotation(playerId, quarter, half) {
@@ -1160,26 +1200,37 @@
                 return;
             }
 
-            // Get suggested starting lineup from rotation plan
+            // Get availability from rotation plan
+            const availability = rotationPlan?.availability || {};
+
+            // Get suggested starting lineup from rotation plan (only available players)
             let suggestedStarters = [];
             if (rotationPlan && rotationPlan.quarters && rotationPlan.quarters[1]) {
-                suggestedStarters = rotationPlan.quarters[1].first || [];
+                suggestedStarters = (rotationPlan.quarters[1].first || [])
+                    .filter(id => availability[id] !== false);
             }
 
-            // Availability list
+            // Availability list - use rotation plan availability
             const availList = document.getElementById('player-availability-list');
-            availList.innerHTML = players
+            availList.innerHTML = `
+                <div class="alert alert-info" style="margin-bottom: 12px;">
+                    Players checked in the rotation plan are automatically selected. Uncheck players who didn't show up.
+                </div>
+            ` + players
                 .sort((a, b) => a.number - b.number)
-                .map(player => `
-                    <div class="availability-item">
-                        <input type="checkbox" id="avail-${player.id}" checked onchange="updateStartingLineup()">
-                        <label for="avail-${player.id}">
-                            <strong>#${player.number} ${player.name}</strong>
-                        </label>
-                    </div>
-                `).join('');
+                .map(player => {
+                    const isAvailable = availability[player.id] !== false;
+                    return `
+                        <div class="availability-item">
+                            <input type="checkbox" id="avail-${player.id}" ${isAvailable ? 'checked' : ''} onchange="updateStartingLineup()">
+                            <label for="avail-${player.id}">
+                                <strong>#${player.number} ${player.name}</strong>
+                            </label>
+                        </div>
+                    `;
+                }).join('');
 
-            // Initialize selected starters from rotation plan or default
+            // Initialize selected starters from rotation plan
             selectedStarters = suggestedStarters.length > 0 ? [...suggestedStarters] : [];
 
             updateStartingLineup();
