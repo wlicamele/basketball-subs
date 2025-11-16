@@ -558,7 +558,7 @@
                         <div id="rotation-grid"></div>
 
                         <div style="margin-top: 24px;">
-                            <button class="btn" onclick="openNewGameModal()" style="width: 100%; padding: 16px; font-size: 18px;">
+                            <button class="btn" onclick="startGameDirectly()" style="width: 100%; padding: 16px; font-size: 18px;">
                                 ▶️ Start Game with This Rotation
                             </button>
                         </div>
@@ -828,7 +828,7 @@
         }
 
         // Rotation Planner
-        function generateRotationPlan() {
+        function generateRotationPlan(onlyFirstHalf = true) {
             if (players.length < 5) {
                 alert('You need at least 5 players to generate a rotation plan.');
                 return;
@@ -872,6 +872,38 @@
                     4: { first: [], second: [] }
                 }
             };
+
+            // Always populate Q1 1st half with top 5 as recommendation
+            const top5 = sortedBySkill.slice(0, Math.min(5, totalPlayers)).map(p => p.id);
+            rotationPlan.quarters[1].first = top5;
+
+            // If not only first half, populate the rest
+            if (!onlyFirstHalf) {
+                fillRestOfRotation();
+                localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
+                renderRotationPlan();
+                return;
+            }
+
+            localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
+            renderRotationPlan();
+        }
+
+        // Fill the rest of the rotation based on Q1 1st half starting lineup
+        function fillRestOfRotation() {
+            if (!rotationPlan || !rotationPlan.quarters[1].first || rotationPlan.quarters[1].first.length !== 5) {
+                alert('Please select exactly 5 players for Q1 1st half before starting the game.');
+                return false;
+            }
+
+            // Get available players
+            const availablePlayers = players.filter(p => rotationPlan.availability[p.id] !== false);
+            const sortedBySkill = [...availablePlayers].sort((a, b) => {
+                const totalA = a.skills.handling + a.skills.shooting + a.skills.defense;
+                const totalB = b.skills.handling + b.skills.shooting + b.skills.defense;
+                return totalB - totalA;
+            });
+            const totalPlayers = sortedBySkill.length;
 
             // Strategy based on player count:
             // - Best players should appear in more halves
@@ -987,8 +1019,52 @@
                 }
             }
 
-            localStorage.setItem('rotationPlan', JSON.stringify(rotationPlan));
-            renderRotationPlan();
+            return true;
+        }
+
+        // Start game directly with rotation (no modal)
+        function startGameDirectly() {
+            if (!rotationPlan || !rotationPlan.quarters[1].first || rotationPlan.quarters[1].first.length !== 5) {
+                alert('Please select exactly 5 players for Q1 1st half (the starting lineup) before starting the game.');
+                return;
+            }
+
+            // Fill rest of rotation
+            if (!fillRestOfRotation()) {
+                return;
+            }
+
+            // Get available players from rotation plan
+            const availablePlayers = players.filter(p => rotationPlan.availability[p.id] !== false);
+
+            // Start game with Q1 1st half lineup
+            const starting = rotationPlan.quarters[1].first;
+
+            // Initialize game
+            currentGame = {
+                id: Date.now(),
+                startTime: new Date().toISOString(),
+                quarter: 1,
+                half: 1,
+                onCourt: starting,
+                availablePlayers: availablePlayers.map(p => p.id),
+                quarterStartTime: Date.now(),
+                halfStartTime: Date.now(),
+                playerStats: {},
+                rotationPlan: rotationPlan
+            };
+
+            // Initialize player stats
+            availablePlayers.forEach(player => {
+                currentGame.playerStats[player.id] = {
+                    quarters: {1: 0, 2: 0, 3: 0, 4: 0},
+                    totalTime: 0,
+                    lastSubIn: starting.includes(player.id) ? Date.now() : null
+                };
+            });
+
+            localStorage.setItem('currentGame', JSON.stringify(currentGame));
+            renderGame();
         }
 
         function renderRotationPlan() {
