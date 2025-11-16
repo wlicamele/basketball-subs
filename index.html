@@ -521,7 +521,10 @@
 
             <!-- HISTORY TAB -->
             <div id="history-tab" class="tab-content">
-                <h2 style="margin-bottom: 20px;">Game History</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>Game History</h2>
+                    <button class="btn btn-danger" onclick="clearAllData()">🗑️ Clear Game Data</button>
+                </div>
                 <div id="game-history"></div>
             </div>
         </div>
@@ -1285,6 +1288,21 @@
                 gameHistory.splice(index, 1);
                 localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
                 renderHistory();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('⚠️ This will delete:\n\n• Current game (if any)\n• All game history\n\nYour roster will NOT be deleted.\n\nContinue?')) {
+                currentGame = null;
+                gameHistory = [];
+
+                localStorage.removeItem('currentGame');
+                localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
+
+                renderGame();
+                renderHistory();
+
+                alert('✓ Game data cleared! Your roster is still saved.');
             }
         }
 
