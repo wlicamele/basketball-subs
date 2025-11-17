@@ -1230,8 +1230,9 @@
             } else {
                 const remainingHalves = [];
                 for (let q = 1; q <= 4; q++) {
-                    const firstHalfRemaining = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
-                    const secondHalfRemaining = (q > currentGame.quarter);
+                    // Only count halves that haven't started yet (not including current half in progress)
+                    const firstHalfRemaining = (q > currentGame.quarter);
+                    const secondHalfRemaining = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
                     if (firstHalfRemaining) remainingHalves.push([q, 'first']);
                     if (secondHalfRemaining) remainingHalves.push([q, 'second']);
                 }
@@ -1249,11 +1250,12 @@
                 });
             }
 
-            // Regenerate remaining halves
+            // Regenerate remaining halves (starting from next half, not current)
             for (let q = currentGame.quarter; q <= 4; q++) {
                 // Determine which halves to regenerate for this quarter
-                const shouldRegenerateFirst = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
-                const shouldRegenerateSecond = (q > currentGame.quarter);
+                // Only regenerate halves that haven't started yet
+                const shouldRegenerateFirst = (q > currentGame.quarter);
+                const shouldRegenerateSecond = (q > currentGame.quarter) || (q === currentGame.quarter && currentGame.half === 1);
 
                 if (shouldRegenerateFirst) {
                     const firstHalf = [];
@@ -2346,11 +2348,22 @@
 
                 // Initialize stats if needed
                 if (!currentGame.playerStats[playerId]) {
+                    // Late arrivals start from the NEXT quarter, not the current one
+                    // Special case: if we're in Q4 half 2, they can't play at all (set to Q5)
+                    let nextQuarter;
+                    if (currentGame.quarter === 4 && currentGame.half === 2) {
+                        nextQuarter = 5; // Beyond the game - will show as unavailable for all quarters
+                    } else if (currentGame.quarter === 4 && currentGame.half === 1) {
+                        nextQuarter = 4; // Can play in Q4 half 2
+                    } else {
+                        nextQuarter = currentGame.quarter + 1; // Next quarter
+                    }
+
                     currentGame.playerStats[playerId] = {
                         quarters: {1: 0, 2: 0, 3: 0, 4: 0},
                         totalTime: 0,
                         arrivedLate: true,
-                        arrivedAtQuarter: currentGame.quarter
+                        arrivedAtQuarter: nextQuarter
                     };
                 }
 
